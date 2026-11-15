@@ -44,15 +44,21 @@ function sendJson(res, status, obj, signIt) {
 }
 
 function readBody(req) {
-  // Defensive: plain Vercel Node functions do NOT pre-parse the body, so
-  // the stream below is the normal path. If some runtime ever populates
-  // req.body, use it when it is still raw bytes/text.
+  // Vercel's Node runtime pre-parses JSON bodies into req.body (object)
+  // despite module.exports.config bodyParser:false, which @vercel/node
+  // only honors for ESM `export const config`. Prefer the raw stream when
+  // available; when the body is already parsed, re-serialize it. That is
+  // byte-identical to the sender's body when the sender used compact JSON
+  // (standard for JSON API clients): JSON.parse preserves key order for
+  // string keys and JSON.stringify emits them in the same order.
   if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
   if (typeof req.body === 'string') return Promise.resolve(Buffer.from(req.body, 'utf8'));
   if (req.body !== undefined && req.body !== null) {
-    // Already parsed into an object: the raw bytes are lost, so the HMAC
-    // can never verify. Fail closed rather than skip authentication.
-    return Promise.reject(new Error('body pre-parsed by runtime, cannot verify signature'));
+    try {
+      return Promise.resolve(Buffer.from(JSON.stringify(req.body), 'utf8'));
+    } catch (e) {
+      return Promise.reject(new Error('pre-parsed body not serializable'));
+    }
   }
   return new Promise((resolve, reject) => {
     const chunks = [];

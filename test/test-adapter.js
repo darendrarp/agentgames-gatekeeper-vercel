@@ -61,7 +61,7 @@ function envelope(taskId, proofTx, mutate) {
 }
 
 // Build a mock Vercel (req, res) pair and invoke the handler.
-async function invoke(method, path, bodyObj, { sign = true, secret = process.env.AGENT_GAMES_HMAC_SECRET, rawBody = null } = {}) {
+async function invoke(method, path, bodyObj, { sign = true, secret = process.env.AGENT_GAMES_HMAC_SECRET, rawBody = null, preparsed = false } = {}) {
   const body = rawBody !== null ? rawBody : (bodyObj === null ? '' : JSON.stringify(bodyObj));
   const headers = { 'content-type': 'application/json' };
   if (sign && body) headers['x-agent-games-signature'] = hmac.sign(body, secret);
@@ -69,6 +69,7 @@ async function invoke(method, path, bodyObj, { sign = true, secret = process.env
   req.method = method;
   req.url = path;
   req.headers = headers;
+  if (preparsed && bodyObj !== null) req.body = JSON.parse(body); // Vercel pre-parses JSON bodies
   const res = {
     headersSent: false,
     statusCode: null,
@@ -78,7 +79,7 @@ async function invoke(method, path, bodyObj, { sign = true, secret = process.env
     end(chunk) { this.body = chunk === undefined ? '' : String(chunk); },
   };
   const done = handler(req, res);
-  if (body) req.push(Buffer.from(body, 'utf8'));
+  if (body && !preparsed) req.push(Buffer.from(body, 'utf8'));
   req.push(null);
   await done;
   let json = null;
@@ -119,6 +120,15 @@ async function main() {
   const e2eOk = await prover.verify(r1.json.proof, r1.json.public_signals);
   check('end-to-end proof verifies (groth16)', e2eOk === true);
   console.log(`      proofBytes=${JSON.stringify(r1.json.proof).length} signals=${r1.json.public_signals.length}`);
+
+  // 3b. Pre-parsed body (Vercel runtime parses JSON before the handler):
+  // re-serialization must reproduce the signed bytes, so HMAC still verifies.
+  const task1p = envelope('vc-valid-preparsed', '0xddd2');
+  const r1p = await invoke('POST', '/agent', task1p, { preparsed: true });
+  check('pre-parsed body -> APPROVE', r1p.status === 200 && r1p.json.decision === 'APPROVE' && r1p.json.reason_code === 'VALID_CONDITION', JSON.stringify(r1p.json).slice(0, 200));
+  check('pre-parsed response signature valid', r1p.sig !== null && hmac.verify(r1p.text, r1p.sig));
+  const e2eOkP = r1p.json.proof ? await prover.verify(r1p.json.proof, r1p.json.public_signals) : false;
+  check('pre-parsed proof verifies (groth16)', e2eOkP === true);
 
   // 4. Idempotency: same task_id again -> byte-identical response
   const r1b = await invoke('POST', '/agent', task1);
