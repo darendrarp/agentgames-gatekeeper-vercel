@@ -1,0 +1,1 @@
+{"$schema":"https://openapi.vercel.sh/vercel.json","functions":{"api/index.js":{"includeFiles":["circuits/**","vendor/**"],"maxDuration":10}},"rewrites":[{"destination":"/api/index","source":"/agent"},{"destination":"/api/index","source":"/healthz"}]}

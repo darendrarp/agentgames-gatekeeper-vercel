@@ -1,0 +1,1 @@
+{"description":"zkVerify Agent Games — Proof Gatekeeper agent as a Vercel serverless function (vendored snarkjs + gatekeeper circuit, zero npm dependencies).","engines":{"node":">=18"},"name":"agentgames-gatekeeper-vercel","private":true,"scripts":{"test":"node test/test-adapter.js"},"version":"0.1.0"}
