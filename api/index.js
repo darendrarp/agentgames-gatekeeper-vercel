@@ -226,3 +226,7 @@ async function handler(req, res) {
 module.exports = handler;
 module.exports.handleTask = handleTask;
 module.exports.handlePreflight = handlePreflight;
+// Disable Vercel's default JSON body parser: HMAC verification needs the
+// exact raw request bytes, and a pre-parsed req.body loses them (live
+// 400s on 2026-11-15 proved the runtime pre-parses without this).
+module.exports.config = { api: { bodyParser: false } };
